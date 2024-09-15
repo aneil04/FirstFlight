@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam and Map</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            margin: 0;
+        }
+        .header {
+            width: 100%;
+            text-align: center;
+        }
+        .content {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            height: calc(100% - 60px);
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+        .webcam {
+            width: 45%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-radius: 10px;
+        }
+        .map {
+            width: 100%;
+            height: 79%;
+            border-radius: 10px;
+        }
+        .model-output {
+          width: 100%;
+          display: flex;
+          flex-direction: row;
+        }
+    </style>
+</head>
+<body style="background-color: rgb(255, 255, 255)">
+    <div class="content">
+        <div class="webcam">
+            <h2>Drone Feed</h2>
+            <img src="{{ url_for('video_feed') }}" width="100%" style="border-radius: 10px;">
+            <div class="model-output">
+              <h4 style="margin-right: 5px;">YoLoV8 Model Output:</h4>
+              <h4 style="font-weight: normal;" id="output">{}</h4>
+            </div>
+            <div class="model-output" style="margin-top: -30px;">
+              <h4 style="margin-right: 5px;">People Saved:</h4>
+              <h4 style="font-weight: normal;" id="people-saved">0</h4>
+            </div>
+        </div>
+        <div class="webcam">
+          <h2>Live Map</h2>
+          <div class="map" id="map"></div>
+        </div>
+    </div>
+
+    <!-- Load the Google Maps JavaScript API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAWrbPGqU6-IJFMysZW65FK521G2icsrKA"></script>
+    <script>
+        let map;
+        let markers = [];
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 5,
+                center: { lat: 0, lng: 0 }  // Initial center of the map
+            });
+        }
+
+        function addMarker(lat, lng) {
+            const position = new google.maps.LatLng(lat, lng);
+            const marker = new google.maps.Marker({
+                position: position,
+                map: map
+            });
+            markers.push(marker);
+        }
+
+        function getPeopleSaved() {
+          fetch('{{ url_for("get_saved") }}').then(response => response.json()).then(data => {
+            console.log(data)
+            const savedCount = document.getElementById('people-saved');
+            savedCount.innerText = data
+          })
+        }
+
+        function fetchOutput() {
+          fetch('{{ url_for("get_output") }}').then(response => response.json()).then(data => {
+            const modelOutput = document.getElementById('output');
+            modelOutput.innerText = JSON.stringify(data)
+          })
+        }
+
+        function fetchMessages() {
+            fetch('{{ url_for("get_messages") }}')
+            .then(response => response.json())
+            .then(data => {
+                // Remove existing markers from the map
+                markers.forEach(marker => marker.setMap(null));
+                markers = [];
+
+                data.messages.forEach(function(message) {
+                    const lat = message.coordinates.lat;
+                    const lng = message.coordinates.lng;
+                    addMarker(lat, lng);
+                });
+
+                // Adjust map center to show all markers
+                if (data.messages.length > 0) {
+                    const bounds = new google.maps.LatLngBounds();
+                    data.messages.forEach(message => {
+                        bounds.extend(new google.maps.LatLng(message.coordinates.lat, message.coordinates.lng));
+                    });
+                    map.fitBounds(bounds);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Initialize the map and start fetching messages every second
+        initMap();
+        setInterval(fetchMessages, 1000);
+        setInterval(fetchOutput, 100);
+        setInterval(getPeopleSaved, 1000);
+    </script>
+</body>
+</html>
